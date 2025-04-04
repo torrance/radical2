@@ -1,0 +1,7 @@
+*.fits
+*.bin
+*.png
+*.aocal
+*.tmp
+*.ms
+__pycache__
