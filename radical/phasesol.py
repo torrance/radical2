@@ -96,7 +96,7 @@ def phasesol(mset, lmndash, fluxes):
             JHWr_d
         ))
 
-        nextparams = params - delta.reshape(params.shape)
+        nextparams = params + delta.reshape(params.shape)
         nextddphases = makeddphases(nextparams, X)
 
         print("Calculating residuals...", flush=True, end="")
@@ -147,7 +147,7 @@ def makeJHWJ(JHWJ, uvws, lmndash, wavelengths, ants1, ants2, fluxes, ddphases, w
     X [ants, params]
 
     """
-    shared = cuda.shared.array((256, 2), dtype=np.float64)
+    shared = cuda.shared.array(256, dtype=np.complex128)
 
     # Axis X refers to each measurement set row
     xidx = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
@@ -172,7 +172,6 @@ def makeJHWJ(JHWJ, uvws, lmndash, wavelengths, ants1, ants2, fluxes, ddphases, w
 
     l_i, m_i, ndash_i = lmndash[isrc]
     l_k, m_k, ndash_k = lmndash[ksrc]
-
     acc = 0 + 0j
 
     for irow in range(xidx, weights.shape[0], xstride):
@@ -204,21 +203,19 @@ def makeJHWJ(JHWJ, uvws, lmndash, wavelengths, ants1, ants2, fluxes, ddphases, w
         acc += rowacc
 
     # Perform the reduction over the block
-    shared[cuda.threadIdx.x, 0] = acc.real
-    shared[cuda.threadIdx.x, 1] = acc.imag
+    shared[cuda.threadIdx.x] = acc
 
     s = 128
     while s > 0:
         cuda.syncthreads()
         if cuda.threadIdx.x < s:
-            shared[cuda.threadIdx.x, 0] += shared[cuda.threadIdx.x + s, 0]
-            shared[cuda.threadIdx.x, 1] += shared[cuda.threadIdx.x + s, 1]
+            shared[cuda.threadIdx.x] += shared[cuda.threadIdx.x + s]
         s >>= 1
 
     # And perform final reduction over the grid
     if cuda.threadIdx.x == 0:
-        cuda.atomic.add(JHWJ, (i, k, 0), shared[0, 0])
-        cuda.atomic.add(JHWJ, (i, k, 1), shared[0, 1])
+        cuda.atomic.add(JHWJ, (i, k, 0), shared[0].real)
+        cuda.atomic.add(JHWJ, (i, k, 1), shared[0].imag)
 
 @cuda.jit
 def makeJHWr(JHWr, uvws, lmndash, wavelengths, ants1, ants2, fluxes, ddphases, weights, data, X):
@@ -289,7 +286,7 @@ def makeJHWr(JHWr, uvws, lmndash, wavelengths, ants1, ants2, fluxes, ddphases, w
             # Finally sum the row
             rowacc += tmp[0, 0] + tmp[0, 1] + tmp[1, 0] + tmp[1, 1]
 
-        rowacc *= 1j * (X[ant1, param_i] - X[ant2, param_i])
+        rowacc *= -1j * (X[ant1, param_i] - X[ant2, param_i])
 
         acc += rowacc
 

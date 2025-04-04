@@ -4,7 +4,7 @@ import numpy as np
 
 @cuda.jit(device=True)
 def conj(a):
-    return a.real - a.imag
+    return a.real - 1j * a.imag
 
 @njit([
     numba.void(numba.complex64[:, :], numba.complex64[:, :], numba.complex64[:, :]),

@@ -3,7 +3,7 @@ import unittest
 
 from radical.transforms import radec_to_lmndash, lm_to_radec
 
-class Util(unittest.TestCase):
+class Transform(unittest.TestCase):
     def test_lmradec_idempotence(self):
         ras = np.random.rand(1000) - 0.5
         decs = np.random.rand(1000) - 0.5
